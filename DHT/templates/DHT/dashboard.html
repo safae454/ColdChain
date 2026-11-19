@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cold Chain – Surveillance</title>
+<style>
+  :root {
+    --fond: #0c2433; --panneau: #123246; --trait: #24506a;
+    --texte: #e8f3f7; --doux: #9db8c6;
+    --chaud: #ffb45a; --eau: #62d4e3;
+    --ok: #6fdc9a; --ko: #ff6f61; --att: #f2c14e;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 22px 16px 48px; background: var(--fond); color: var(--texte);
+    font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif; }
+  .page { max-width: 1120px; margin: 0 auto; display: grid; gap: 16px; }
+  header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+  h1 { margin: 0; font-size: 1.35rem; font-weight: 650; letter-spacing: .01em; }
+  .live { display: flex; align-items: center; gap: 8px; font-size: .9rem; color: var(--doux); }
+  .point { width: 10px; height: 10px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 0 rgba(111,220,154,.6); animation: pouls 2s infinite; }
+  .point.perdu { background: var(--att); animation: none; }
+  .point.hors { background: var(--ko); animation: none; }
+  @keyframes pouls { 70% { box-shadow: 0 0 0 9px rgba(111,220,154,0); } 100% { box-shadow: 0 0 0 0 rgba(111,220,154,0); } }
+
+  .bandeau { padding: 16px 20px; border-radius: 10px; border: 1px solid; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
+  .bandeau b { font-size: 1.25rem; font-weight: 650; }
+  .bandeau span { font-size: .95rem; opacity: .9; }
+  .bandeau.ok { background: #143d33; color: #9af3bd; border-color: #2a6b57; }
+  .bandeau.ko { background: #4a1f22; color: #ffb9b2; border-color: #8a3a3a; }
+  .bandeau.att { background: #463a14; color: #f7d77a; border-color: #7a6424; }
+
+  .barre { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--doux); font-size: .92rem; }
+  .choix { display: inline-flex; border: 1px solid var(--trait); border-radius: 8px; overflow: hidden; }
+  .choix button { font: inherit; font-size: .88rem; color: var(--doux); background: transparent; border: 0; padding: 6px 14px; cursor: pointer; }
+  .choix button + button { border-left: 1px solid var(--trait); }
+  .choix button.actif { background: var(--trait); color: var(--texte); }
+  .choix button:focus-visible { outline: 3px solid var(--att); outline-offset: -3px; }
+
+  .duo { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+  .carte { background: var(--panneau); border: 1px solid var(--trait); border-radius: 12px; padding: 18px; }
+  .carte h2 { margin: 0 0 4px; font-size: 1.05rem; font-weight: 600; }
+  .depuis { color: var(--doux); font-size: .88rem; margin-bottom: 8px; }
+  .mesure { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .jauge { width: 210px; flex: none; }
+  .piste { fill: none; stroke: var(--trait); stroke-width: 14; stroke-linecap: round; }
+  .arc { fill: none; stroke-width: 14; stroke-linecap: round; transition: stroke-dashoffset .6s ease; }
+  .temp .arc { stroke: var(--chaud); } .temp.depasse .arc { stroke: var(--ko); }
+  .hum .arc { stroke: var(--eau); }
+  .jauge text { fill: var(--texte); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .jauge .bord { fill: var(--doux); font-size: 9px; font-weight: 400; }
+  .jauge .seuil { stroke: var(--texte); stroke-width: 2; }
+  .stats { display: grid; grid-template-columns: repeat(3, auto); gap: 4px 20px; font-size: .9rem; margin: 0; }
+  .stats dt { color: var(--doux); } .stats dd { margin: 0; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .stats div { display: contents; }
+  .zone { position: relative; height: 230px; margin-top: 14px; }
+
+  .bas { display: grid; gap: 16px; grid-template-columns: 1fr 2fr; }
+  @media (max-width: 800px) { .bas { grid-template-columns: 1fr; } .duo { grid-template-columns: 1fr; } }
+  .liste { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; font-size: .95rem; }
+  .liste li { display: flex; justify-content: space-between; gap: 12px; }
+  .liste b { font-variant-numeric: tabular-nums; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: .92rem; font-variant-numeric: tabular-nums; }
+  th { text-align: left; color: var(--doux); font-weight: 500; padding: 6px 8px; border-bottom: 1px solid var(--trait); }
+  td { padding: 7px 8px; border-bottom: 1px solid rgba(36,80,106,.5); }
+  td.haut { color: var(--ko); font-weight: 650; }
+  #erreur { display: none; padding: 10px 14px; border-radius: 8px; background: #4a1f22; color: #ffb9b2; border: 1px solid #8a3a3a; }
+  @media (prefers-reduced-motion: reduce) { .point { animation: none; } .arc { transition: none; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Cold Chain – Surveillance du capteur DHT11</h1>
+    <div class="live"><span class="point perdu" id="point"></span><span id="etat">Connexion à l'API…</span></div>
+  </header>
+
+  <div id="erreur" role="alert"></div>
+
+  <div class="bandeau att" id="bandeau"><b id="bandeau-titre">En attente de données</b><span id="bandeau-detail"></span></div>
+
+  <div class="barre">
+    <span>Courbes et statistiques sur les dernières mesures :</span>
+    <div class="choix" id="choix">
+      <button type="button" data-n="20">20</button>
+      <button type="button" data-n="50" class="actif">50</button>
+      <button type="button" data-n="100">100</button>
+    </div>
+  </div>
+
+  <div class="duo">
+    <section class="carte temp" id="carte-temp">
+      <h2>Température</h2>
+      <div class="depuis" id="depuis-temp">Dernière mesure : --</div>
+      <div class="mesure">
+        <svg class="jauge" viewBox="0 0 200 124" role="img" aria-label="Jauge de température">
+          <path class="piste" d="M20 100 A80 80 0 0 1 180 100"/>
+          <path class="arc" id="arc-temp" d="M20 100 A80 80 0 0 1 180 100" stroke-dasharray="251.33" stroke-dashoffset="251.33"/>
+          <line class="seuil" id="tick-temp" x1="0" y1="0" x2="0" y2="0"/>
+          <text x="100" y="86" text-anchor="middle" font-size="30" id="val-temp">--</text>
+          <text class="bord" x="20" y="118" text-anchor="middle">0</text>
+          <text class="bord" x="180" y="118" text-anchor="middle">40 °C</text>
+        </svg>
+        <dl class="stats">
+          <div><dt>Min</dt><dt>Moyenne</dt><dt>Max</dt></div>
+          <div><dd id="min-temp">--</dd><dd id="moy-temp">--</dd><dd id="max-temp">--</dd></div>
+        </dl>
+      </div>
+      <div class="zone"><canvas id="graphe-temp"></canvas></div>
+    </section>
+
+    <section class="carte hum" id="carte-hum">
+      <h2>Humidité</h2>
+      <div class="depuis" id="depuis-hum">Dernière mesure : --</div>
+      <div class="mesure">
+        <svg class="jauge" viewBox="0 0 200 124" role="img" aria-label="Jauge d'humidité">
+          <path class="piste" d="M20 100 A80 80 0 0 1 180 100"/>
+          <path class="arc" id="arc-hum" d="M20 100 A80 80 0 0 1 180 100" stroke-dasharray="251.33" stroke-dashoffset="251.33"/>
+          <text x="100" y="86" text-anchor="middle" font-size="30" id="val-hum">--</text>
+          <text class="bord" x="20" y="118" text-anchor="middle">0</text>
+          <text class="bord" x="180" y="118" text-anchor="middle">100 %</text>
+        </svg>
+        <dl class="stats">
+          <div><dt>Min</dt><dt>Moyenne</dt><dt>Max</dt></div>
+          <div><dd id="min-hum">--</dd><dd id="moy-hum">--</dd><dd id="max-hum">--</dd></div>
+        </dl>
+      </div>
+      <div class="zone"><canvas id="graphe-hum"></canvas></div>
+    </section>
+  </div>
+
+  <div class="bas">
+    <section class="carte">
+      <h2>Incidents</h2>
+      <ul class="liste">
+        <li><span>Seuil de température</span><b id="seuil"></b></li>
+        <li><span>Mesures au-dessus du seuil</span><b id="compteur">0</b></li>
+        <li><span>Dernier dépassement</span><b id="dernier-depassement">aucun</b></li>
+        <li><span>Mesures enregistrées</span><b id="total">0</b></li>
+      </ul>
+    </section>
+    <section class="carte">
+      <h2>Dernières mesures</h2>
+      <table>
+        <thead><tr><th>Heure</th><th>Température</th><th>Humidité</th></tr></thead>
+        <tbody id="corps-table"></tbody>
+      </table>
+    </section>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  var SEUIL = 25;            // °C : au-dessus, incident
+  var RAFRAICHIR_MS = 5000;  // actualisation de la page
+  var DELAI_PERDU_S = 60;    // sans mesure depuis 60 s : carte probablement coupée
+  var API_URL = "/list/";
+  var nb = 50, mesures = [], derniereDate = null;
+  var ARC = 251.33;
+
+  function el(id) { return document.getElementById(id); }
+  function fmt(x, u) { return x.toFixed(1) + u; }
+
+  Chart.defaults.color = "#9db8c6";
+  Chart.defaults.font.family = '"Avenir Next", "Segoe UI", system-ui, sans-serif';
+
+  function creerGraphe(id, couleur, fond, avecSeuil) {
+    var datasets = [{ data: [], borderColor: couleur, backgroundColor: fond, borderWidth: 2.5,
+                      pointRadius: 0, pointHoverRadius: 4, tension: 0.3, fill: true }];
+    if (avecSeuil) datasets.push({ data: [], borderColor: "#ff6f61", borderDash: [6, 5], borderWidth: 1.5,
+                                   pointRadius: 0, fill: false });
+    return new Chart(el(id), { type: "line", data: { labels: [], datasets: datasets }, options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { maxTicksLimit: 6 }, grid: { color: "rgba(255,255,255,.06)" } },
+                y: { grid: { color: "rgba(255,255,255,.08)" } } } } });
+  }
+  var gTemp = creerGraphe("graphe-temp", "#ffb45a", "rgba(255,180,90,.14)", true);
+  var gHum = creerGraphe("graphe-hum", "#62d4e3", "rgba(98,212,227,.14)", false);
+
+  function placerSeuil() {  // repère du seuil sur la jauge (0 à 40 °C)
+    var a = Math.PI * (SEUIL / 40);
+    var c = Math.cos(a), s = Math.sin(a), t = el("tick-temp");
+    t.setAttribute("x1", 100 - 70 * c); t.setAttribute("y1", 100 - 70 * s);
+    t.setAttribute("x2", 100 - 91 * c); t.setAttribute("y2", 100 - 91 * s);
+    el("seuil").textContent = SEUIL + " °C";
+  }
+  function jauge(id, valeur, max) {
+    var f = Math.min(1, Math.max(0, valeur / max));
+    el(id).style.strokeDashoffset = ARC * (1 - f);
+  }
+  function duree(date) {
+    var s = Math.max(0, Math.round((Date.now() - date.getTime()) / 1000));
+    if (s < 60) return s + " s";
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + " min";
+    var h = Math.floor(m / 60);
+    return h < 48 ? h + " h " + (m % 60) + " min" : Math.floor(h / 24) + " jours";
+  }
+  function stats(tab) {
+    var min = Math.min.apply(null, tab), max = Math.max.apply(null, tab);
+    var moy = tab.reduce(function (a, b) { return a + b; }, 0) / tab.length;
+    return { min: min, max: max, moy: moy };
+  }
+  function bandeau(classe, titre, detail) {
+    el("bandeau").className = "bandeau " + classe;
+    el("bandeau-titre").textContent = titre;
+    el("bandeau-detail").textContent = detail;
+  }
+
+  function afficherTemps() {
+    if (!derniereDate) return;
+    var d = duree(derniereDate), s = (Date.now() - derniereDate.getTime()) / 1000;
+    el("depuis-temp").textContent = "Dernière mesure : il y a " + d;
+    el("depuis-hum").textContent = "Dernière mesure : il y a " + d;
+    var perdu = s > DELAI_PERDU_S, derniere = mesures[mesures.length - 1];
+    el("point").className = "point" + (perdu ? " perdu" : "");
+    el("etat").textContent = perdu ? "Aucune mesure reçue depuis " + d : "Données en direct";
+    if (perdu) bandeau("att", "Aucune mesure récente", "Vérifier l'alimentation et le Wi-Fi de la carte");
+    else if (derniere.temperature > SEUIL) bandeau("ko", "Alerte : température au-dessus de " + SEUIL + " °C", "Dernière valeur : " + fmt(derniere.temperature, " °C"));
+    else bandeau("ok", "Aucun incident en cours", "Température sous le seuil de " + SEUIL + " °C");
+  }
+
+  function dessiner() {
+    if (!mesures.length) return;
+    var recentes = mesures.slice(-nb);
+    var labels = recentes.map(function (m) { return new Date(m.date).toLocaleTimeString("fr-FR"); });
+    var t = recentes.map(function (m) { return m.temperature; });
+    var h = recentes.map(function (m) { return m.humidity; });
+    gTemp.data.labels = labels; gTemp.data.datasets[0].data = t;
+    gTemp.data.datasets[1].data = t.map(function () { return SEUIL; });
+    gHum.data.labels = labels; gHum.data.datasets[0].data = h;
+    gTemp.update(); gHum.update();
+    var st = stats(t), sh = stats(h);
+    el("min-temp").textContent = fmt(st.min, " °C"); el("moy-temp").textContent = fmt(st.moy, " °C"); el("max-temp").textContent = fmt(st.max, " °C");
+    el("min-hum").textContent = fmt(sh.min, " %"); el("moy-hum").textContent = fmt(sh.moy, " %"); el("max-hum").textContent = fmt(sh.max, " %");
+  }
+
+  function actualiser() {
+    fetch(API_URL, { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (json) {
+        el("erreur").style.display = "none";
+        mesures = json.data.slice().sort(function (a, b) { return a.id - b.id; });
+        el("total").textContent = mesures.length;
+        var hautes = mesures.filter(function (m) { return m.temperature > SEUIL; });
+        el("compteur").textContent = hautes.length;
+        el("dernier-depassement").textContent = hautes.length
+          ? new Date(hautes[hautes.length - 1].date).toLocaleString("fr-FR") : "aucun";
+        if (!mesures.length) { el("etat").textContent = "Connecté, aucune mesure pour l'instant"; return; }
+        var d = mesures[mesures.length - 1];
+        derniereDate = new Date(d.date);
+        el("val-temp").textContent = fmt(d.temperature, " °C");
+        el("val-hum").textContent = fmt(d.humidity, " %");
+        jauge("arc-temp", d.temperature, 40); jauge("arc-hum", d.humidity, 100);
+        el("carte-temp").classList.toggle("depasse", d.temperature > SEUIL);
+        el("corps-table").innerHTML = mesures.slice(-8).reverse().map(function (m) {
+          return "<tr><td>" + new Date(m.date).toLocaleTimeString("fr-FR") + "</td><td class='" +
+            (m.temperature > SEUIL ? "haut" : "") + "'>" + fmt(m.temperature, " °C") + "</td><td>" + fmt(m.humidity, " %") + "</td></tr>";
+        }).join("");
+        dessiner(); afficherTemps();
+      })
+      .catch(function (e) {
+        el("point").className = "point hors";
+        el("etat").textContent = "API injoignable";
+        var err = el("erreur"); err.style.display = "block";
+        err.textContent = "Impossible de lire " + API_URL + " (" + e.message + "). Vérifier que le serveur Django tourne.";
+      });
+  }
+
+  el("choix").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button"); if (!b) return;
+    nb = parseInt(b.getAttribute("data-n"), 10);
+    Array.prototype.forEach.call(el("choix").children, function (x) { x.classList.toggle("actif", x === b); });
+    dessiner();
+  });
+
+  placerSeuil(); actualiser();
+  setInterval(actualiser, RAFRAICHIR_MS);
+  setInterval(afficherTemps, 1000);
+</script>
+</body>
+</html>
